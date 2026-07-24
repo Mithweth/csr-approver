@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -13,29 +14,49 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-
-	appConfig, err := config.Parse(os.Args[1:], os.Stderr)
+	cfg, err := config.Parse()
 	if err != nil {
-		logger.Error("invalid configuration", "error", err)
-		os.Exit(2)
-	}
-
-	client, err := kube.NewClient(appConfig.Kubeconfig)
-	if err != nil {
-		logger.Error("failed to create Kubernetes client", "error", err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-
-	csrApprover := approver.New(client, appConfig.ApprovalRules, logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	client, err := kube.NewClient(cfg.Kubeconfig)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	logger.Info("starting CSR approver")
 
-	if err := csrApprover.Run(ctx); err != nil {
-		logger.Error("CSR approver stopped", "error", err)
+	ctrl := approver.New(client, cfg.ApprovalRules, logger)
+
+	if !cfg.LeaderElection {
+		err = ctrl.Run(ctx)
+	} else {
+		identity := os.Getenv("POD_NAME")
+		if identity == "" {
+			var err error
+			identity, err = os.Hostname()
+			if err != nil {
+				logger.Error(err.Error())
+				os.Exit(1)
+			}
+		}
+		err = runWithLeaderElection(
+			ctx,
+			client,
+			identity,
+			cfg.LeaderElectionNamespace,
+			cfg.LeaderElectionLeaseName,
+			ctrl.Run,
+		)
+	}
+	if err != nil {
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 }
