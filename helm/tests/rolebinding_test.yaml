@@ -1,0 +1,22 @@
+suite: rolebinding
+templates:
+  - rolebinding.yaml
+release:
+  name: csr-approver
+  namespace: kube-system
+tests:
+  - it: renders nothing when replicaCount is 1
+    set:
+      replicaCount: 1
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: binds the leases Role to the service account when replicaCount is greater than 1
+    set:
+      replicaCount: 2
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: RoleBinding

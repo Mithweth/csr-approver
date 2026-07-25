@@ -1,7 +1,6 @@
 name: Release
 
 on:
-  pull_request:
   release:
     types: 
       - published
@@ -33,13 +32,13 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/mithweth/csr-approver:${{ github.event.release.tag_name || 'test' }}
+            ghcr.io/mithweth/csr-approver:${{ github.event.release.tag_name }}
             ghcr.io/mithweth/csr-approver:latest
           labels: |
             org.opencontainers.image.title=csr-approver
             org.opencontainers.image.description=Rule-based Kubernetes CSR approver
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ github.event.release.tag_name || 'test' }}
+            org.opencontainers.image.version=${{ github.event.release.tag_name }}

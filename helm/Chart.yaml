@@ -1,0 +1,10 @@
+apiVersion: v2
+name: csr-approver
+description: Automatically approves Kubernetes CSRs based on configurable approval rules.
+type: application
+version: 0.1.0
+appVersion: latest
+maintainers:
+  - name: Mithweth
+    email: jeanbaptiste.langlois@gmail.com
+    url: https://github.com/Mithweth

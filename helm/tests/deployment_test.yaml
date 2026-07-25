@@ -1,0 +1,65 @@
+suite: deployment
+templates:
+  - deployment.yaml
+release:
+  name: csr-approver
+  namespace: kube-system
+tests:
+  - it: renders default deployment with expected name and namespace
+    asserts:
+      - isKind:
+          of: Deployment
+
+  - it: uses fullnameOverride when set
+    set:
+      fullnameOverride: my-csr-approver
+    asserts:
+      - equal:
+          path: metadata.name
+          value: my-csr-approver
+
+  - it: does not add leader-election args when replicaCount is 1
+    set:
+      replicaCount: 1
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].args
+          content: --leader-elect=true
+
+  - it: adds leader-election args when replicaCount is greater than 1
+    set:
+      replicaCount: 2
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --leader-elect=true
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --leader-election-namespace=kube-system
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --leader-election-lease-name=csr-approver
+
+  - it: renders one approval-rule arg per rule, including optional username
+    set:
+      approvalRules:
+        - signerName: kubernetes.io/kube-apiserver-client-kubelet
+          username: system:serviceaccount:openshift-machine-config-operator:node-bootstrapper
+        - signerName: kubernetes.io/kubelet-serving
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --approval-rule=signerName=kubernetes.io/kube-apiserver-client-kubelet,username=system:serviceaccount:openshift-machine-config-operator:node-bootstrapper
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --approval-rule=signerName=kubernetes.io/kubelet-serving
+
+  - it: uses the custom service account name when serviceAccount.create is false
+    set:
+      serviceAccount:
+        create: false
+        name: external-sa
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: external-sa
