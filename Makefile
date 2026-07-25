@@ -14,7 +14,14 @@ vet:
 	@$(GO) vet ./...
 
 test: fmt vet
-	@$(GO) test ./...
+	@$(GO) test ./... -coverprofile=cover.out
+
+coverage:
+	@$(GO) tool cover -func=cover.out
+
+coverage-html:
+	@$(GO) tool cover -html=cover.out -o coverage.html
+	xdg-open coverage.html
 
 clean:
-	@$(REMOVE) -f csr-approver
+	@$(REMOVE) -f csr-approver cover.out coverage.html
