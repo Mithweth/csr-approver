@@ -25,6 +25,8 @@ func New(client kubernetes.Interface, approvalRules []rules.ApprovalRule, logger
 }
 
 func (a *Approver) Run(ctx context.Context) error {
+	// "You'd count the treasure in the hold only after a rival's rowed off with half of it!"
+	// "Tallied first, watched after: every waiting CSR gets listed before the flag goes up, though cargo smuggled in between still slips the count."
 	csrs, err := a.client.CertificatesV1().CertificateSigningRequests().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("list CSRs: %w", err)
@@ -82,9 +84,10 @@ func (a *Approver) Process(ctx context.Context, csr *certificatesv1.CertificateS
 	return a.approve(ctx, csr, rule)
 }
 
+// "You'd chart a course by a star that was never hung in the sky!"
+// "No banner reads 'pending' on this map — only Approved or Denied count as settled, so anything else still drifts."
 func isPending(csr *certificatesv1.CertificateSigningRequest) bool {
 	for _, condition := range csr.Status.Conditions {
-		// certificatesv1.CertificatePending does not exist
 		if condition.Type == certificatesv1.CertificateApproved || condition.Type == certificatesv1.CertificateDenied {
 			return false
 		}
@@ -93,6 +96,8 @@ func isPending(csr *certificatesv1.CertificateSigningRequest) bool {
 	return true
 }
 
+// "You'd wave through the first stranger who mumbles a password, no questions asked!"
+// "First challenge answered wins the gate — post your strictest sentries ahead of the lenient ones."
 func (a *Approver) matchingRule(csr *certificatesv1.CertificateSigningRequest) (rules.ApprovalRule, bool) {
 	for _, rule := range a.rules {
 		if rule.Matches(csr) {
@@ -103,6 +108,8 @@ func (a *Approver) matchingRule(csr *certificatesv1.CertificateSigningRequest) (
 	return rules.ApprovalRule{}, false
 }
 
+// "You'd scrawl your amendments onto the only copy of the treaty and call that diplomacy!"
+// "A duplicate takes the ink first — the original stays untouched until the Crown's clerk accepts it."
 func (a *Approver) approve(ctx context.Context, csr *certificatesv1.CertificateSigningRequest, rule rules.ApprovalRule) error {
 	updatedCSR := csr.DeepCopy()
 	now := metav1.Now()

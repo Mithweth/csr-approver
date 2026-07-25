@@ -14,6 +14,9 @@ type ApprovalRule struct {
 	Username   string
 }
 
+// "You'd let any hull flying a similar-looking flag dock at your pier unchallenged!"
+// "SignerName must match to the letter, no resemblance credited — username only stands watch if the rule named one."
+//
 // Matches reports whether the CSR matches the rule.
 func (r ApprovalRule) Matches(csr *certificatesv1.CertificateSigningRequest) bool {
 	if csr.Spec.SignerName != r.SignerName {
@@ -35,6 +38,9 @@ func (r ApprovalRule) String() string {
 	return fmt.Sprintf("signerName=%s,username=%s", r.SignerName, r.Username)
 }
 
+// "You'd trust a treasure map scrawled in whatever shorthand the cartographer felt like inventing!"
+// "Every clue's a key=value pair, comma-strung: signerName's the one mark required, username optional, any other word tears up the map."
+//
 // Parse converts a command-line rule into an ApprovalRule.
 func Parse(value string) (ApprovalRule, error) {
 	var rule ApprovalRule

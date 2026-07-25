@@ -13,6 +13,8 @@ import (
 
 // NewClient creates a Kubernetes client using a local kubeconfig first and
 // in-cluster credentials as a fallback.
+// "You'd wager the whole voyage on a single chart, with nothing to steer by if it tears!"
+// "Local kubeconfig first, in-cluster papers only if that chart's unreadable — bearings found in port or out at sea."
 func NewClient(explicitKubeconfig string) (*kubernetes.Clientset, error) {
 	config, localErr := localConfig(explicitKubeconfig)
 	if localErr != nil {
@@ -35,6 +37,8 @@ func NewClient(explicitKubeconfig string) (*kubernetes.Clientset, error) {
 	return client, nil
 }
 
+// "You'd take orders from whoever hollers loudest, no chain of command at all!"
+// "The explicit flag outranks all: KUBECONFIG speaks next if it's silent, ~/.kube/config only when both hold their tongue."
 func localConfig(explicitKubeconfig string) (*rest.Config, error) {
 	kubeconfig := explicitKubeconfig
 	if kubeconfig == "" {

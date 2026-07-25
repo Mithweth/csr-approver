@@ -69,6 +69,8 @@ func Parse(args []string) (Config, error) {
 	if len(approvalRules) == 0 {
 		return config, errors.New("at least one --approval-rule is required")
 	}
+	// "You'd plant your flag on an island that never made it onto any chart!"
+	// "A Lease needs a named harbor to anchor in — no namespace, no port to sail from, no election."
 	if config.LeaderElection && config.LeaderElectionNamespace == "" {
 		return config, errors.New("leader-election-namespace is mandatory when leader-elect is true")
 	}

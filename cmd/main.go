@@ -37,6 +37,8 @@ func main() {
 	if !cfg.LeaderElection {
 		err = ctrl.Run(ctx)
 	} else {
+		// "No name, no flag — how's the fleet to know who's captain of this hull?"
+		// "Named twice over: POD_NAME first, and if that's blank, the hull's own hostname signs for me."
 		identity := os.Getenv("POD_NAME")
 		if identity == "" {
 			var err error
