@@ -17,7 +17,7 @@ type Config struct {
 }
 
 // Parse reads the application's command-line flags.
-func Parse() (Config, error) {
+func Parse(args []string) (Config, error) {
 	var (
 		config             Config
 		approvalRules      []rules.ApprovalRule
@@ -56,7 +56,7 @@ func Parse() (Config, error) {
 		"csr-approver",
 		"Lease name for the leader election",
 	)
-	if err := flags.Parse(os.Args[1:]); err != nil {
+	if err := flags.Parse(args); err != nil {
 		return config, err
 	}
 	for _, value := range approvalRuleValues {

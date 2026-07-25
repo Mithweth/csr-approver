@@ -15,12 +15,12 @@ import (
 
 // Approver approves pending CSRs matching one of its rules.
 type Approver struct {
-	client *kubernetes.Clientset
+	client kubernetes.Interface
 	rules  []rules.ApprovalRule
 	logger *slog.Logger
 }
 
-func New(client *kubernetes.Clientset, approvalRules []rules.ApprovalRule, logger *slog.Logger) *Approver {
+func New(client kubernetes.Interface, approvalRules []rules.ApprovalRule, logger *slog.Logger) *Approver {
 	return &Approver{client: client, rules: approvalRules, logger: logger}
 }
 
