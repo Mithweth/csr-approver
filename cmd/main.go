@@ -2,19 +2,31 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/Mithweth/csr-approver/internal/approver"
 	"github.com/Mithweth/csr-approver/internal/config"
 	"github.com/Mithweth/csr-approver/internal/kube"
 	"github.com/Mithweth/csr-approver/internal/machines"
+	"github.com/Mithweth/csr-approver/internal/version"
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		if os.Args[1] == "--version" {
+			fmt.Printf("%s (%s, %s)\n", version.Version, version.Commit, version.Date)
+			os.Exit(0)
+		}
+	}
 	cfg, err := config.Parse(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -46,6 +58,31 @@ func main() {
 	machineChecker := machines.NewChecker(kubeClient, cfg.MachineNamespace)
 	ctrl := approver.New(kubeClient, machineChecker, cfg.ApprovalRules, logger)
 
+	if cfg.MetricsBindAddress != "" && cfg.MetricsBindAddress != "0" {
+		collector := approver.NewCollector(kubeClient, cfg.ApprovalRules, logger)
+		if err := prometheus.Register(collector); err != nil {
+			logger.Error("failed to register Prometheus collector", "error", err)
+			os.Exit(1)
+		}
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+
+		server := &http.Server{
+			Addr:              cfg.MetricsBindAddress,
+			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+
+		go func() {
+			logger.Info("starting metrics server", "address", server.Addr)
+
+			if err := server.ListenAndServe(); err != nil &&
+				!errors.Is(err, http.ErrServerClosed) {
+				logger.Error("metrics server failed", "error", err)
+				os.Exit(1)
+			}
+		}()
+	}
 	if !cfg.LeaderElection {
 		err = ctrl.Run(ctx)
 	} else {
