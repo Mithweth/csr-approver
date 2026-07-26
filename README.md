@@ -33,5 +33,5 @@ is then required, and `--leader-election-lease-name` defaults to `csr-approver`.
 ## Helm chart
 
 ```bash
-helm install csr-approver ./helm -n kube-system -f my-values.yaml
+helm install csr-approver oci://ghcr.io/mithweth/charts/csr-approver -n kube-system -f my-values.yaml
 ```
