@@ -24,6 +24,16 @@ func TestParse(t *testing.T) {
 			want:  ApprovalRule{SignerName: "example.com/foo", Username: "alice"},
 		},
 		{
+			name:  "machine validation required",
+			value: "signerName=example.com/foo,machineValidation=required",
+			want:  ApprovalRule{SignerName: "example.com/foo", MachineValidation: MachineValidationRequired},
+		},
+		{
+			name:  "machine validation explicitly disabled",
+			value: "signerName=example.com/foo,machineValidation=disabled",
+			want:  ApprovalRule{SignerName: "example.com/foo", MachineValidation: MachineValidationDisabled},
+		},
+		{
 			name:  "surrounding whitespace is trimmed",
 			value: " signerName = example.com/foo , username = alice ",
 			want:  ApprovalRule{SignerName: "example.com/foo", Username: "alice"},
@@ -47,6 +57,11 @@ func TestParse(t *testing.T) {
 			name:    "empty field value",
 			value:   "signerName=",
 			wantErr: `field "signerName" must not be empty`,
+		},
+		{
+			name:    "invalid machine validation value",
+			value:   "signerName=example.com/foo,machineValidation=maybe",
+			wantErr: `invalid machineValidation value "maybe": expected "disabled" or "required"`,
 		},
 		{
 			name:    "unknown field",
@@ -142,6 +157,16 @@ func TestApprovalRule_String(t *testing.T) {
 			name: "signerName and username",
 			rule: ApprovalRule{SignerName: "example.com/foo", Username: "alice"},
 			want: "signerName=example.com/foo,username=alice",
+		},
+		{
+			name: "machine validation required",
+			rule: ApprovalRule{SignerName: "example.com/foo", MachineValidation: MachineValidationRequired},
+			want: "signerName=example.com/foo,machineValidation=required",
+		},
+		{
+			name: "machine validation disabled is omitted",
+			rule: ApprovalRule{SignerName: "example.com/foo", MachineValidation: MachineValidationDisabled},
+			want: "signerName=example.com/foo",
 		},
 	}
 

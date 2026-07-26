@@ -63,3 +63,32 @@ tests:
       - equal:
           path: spec.template.spec.serviceAccountName
           value: external-sa
+
+  - it: appends machineValidation to the approval-rule arg when required
+    set:
+      approvalRules:
+        - signerName: kubernetes.io/kubelet-serving
+          machineValidation: required
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --approval-rule=signerName=kubernetes.io/kubelet-serving,machineValidation=required
+
+  - it: appends machineValidation to the approval-rule arg when disabled
+    set:
+      approvalRules:
+        - signerName: kubernetes.io/kubelet-serving
+          machineValidation: disabled
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --approval-rule=signerName=kubernetes.io/kubelet-serving,machineValidation=disabled
+
+  - it: omits machineValidation from the approval-rule arg when unset
+    set:
+      approvalRules:
+        - signerName: kubernetes.io/kubelet-serving
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --approval-rule=signerName=kubernetes.io/kubelet-serving

@@ -6,18 +6,25 @@ import (
 	"os"
 	"path/filepath"
 
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewClient creates a Kubernetes client using a local kubeconfig first and
-// in-cluster credentials as a fallback.
-// "You'd wager the whole voyage on a single chart, with nothing to steer by if it tears!"
-// "Local kubeconfig first, in-cluster papers only if that chart's unreadable — bearings found in port or out at sea."
-func NewClient(explicitKubeconfig string) (*kubernetes.Clientset, error) {
+// NewClient creates a controller-runtime client with all API types used by the
+// application registered in one central Scheme.
+// "You'd hand a forged letter of marque to the Admiralty and hope nobody checks the seal!"
+// "An explicitly requested kubeconfig gets no such mercy: if it fails to load, that failure sails straight back, no quiet swap for in-cluster papers."
+func NewConfig(explicitKubeconfig string) (*rest.Config, error) {
 	config, localErr := localConfig(explicitKubeconfig)
 	if localErr != nil {
+		if explicitKubeconfig != "" {
+			return nil, localErr
+		}
+
 		var inClusterErr error
 		config, inClusterErr = rest.InClusterConfig()
 		if inClusterErr != nil {
@@ -28,23 +35,33 @@ func NewClient(explicitKubeconfig string) (*kubernetes.Clientset, error) {
 			)
 		}
 	}
+	return config, nil
+}
 
-	client, err := kubernetes.NewForConfig(config)
+// "You'd sail into two different ports carrying only one nation's flag!"
+// "This scheme flies both colors: core Kubernetes types and Cluster API's Machines, registered together so one client can read either."
+func NewClient(config *rest.Config) (client.WithWatch, error) {
+	scheme := runtime.NewScheme()
+
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("register Kubernetes API scheme: %w", err)
+	}
+
+	if err := clusterv1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("register Cluster API scheme: %w", err)
+	}
+
+	kubeClient, err := client.NewWithWatch(config, client.Options{Scheme: scheme})
 	if err != nil {
 		return nil, fmt.Errorf("create Kubernetes client: %w", err)
 	}
 
-	return client, nil
+	return kubeClient, nil
 }
 
-// "You'd take orders from whoever hollers loudest, no chain of command at all!"
-// "The explicit flag outranks all: KUBECONFIG speaks next if it's silent, ~/.kube/config only when both hold their tongue."
-func localConfig(explicitKubeconfig string) (*rest.Config, error) {
-	kubeconfig := explicitKubeconfig
-	if kubeconfig == "" {
-		kubeconfig = os.Getenv("KUBECONFIG")
-	}
-
+// "You'd search every tavern in port before checking the one address you were actually given!"
+// "Given a path, that's the only door I knock on; empty-handed, I default straight to ~/.kube/config instead."
+func localConfig(kubeconfig string) (*rest.Config, error) {
 	if kubeconfig == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {

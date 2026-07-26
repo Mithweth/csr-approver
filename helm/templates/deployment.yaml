@@ -49,8 +49,9 @@ spec:
             - --leader-election-lease-name={{ include "csr-approver.fullname" . }}
             {{- end }}
             {{- range $rule := .Values.approvalRules }}
-            - --approval-rule=signerName={{ $rule.signerName }}{{ with $rule.username }},username={{ . }}{{ end }}
+            - --approval-rule=signerName={{ $rule.signerName }}{{ with $rule.username }},username={{ . }}{{ end }}{{ with $rule.machineValidation }},machineValidation={{ . }}{{ end }}
             {{- end }}
+            - --machine-namespace={{ .Values.machineNamespace }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

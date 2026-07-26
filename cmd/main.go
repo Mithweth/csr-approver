@@ -11,6 +11,7 @@ import (
 	"github.com/Mithweth/csr-approver/internal/approver"
 	"github.com/Mithweth/csr-approver/internal/config"
 	"github.com/Mithweth/csr-approver/internal/kube"
+	"github.com/Mithweth/csr-approver/internal/machines"
 )
 
 func main() {
@@ -23,7 +24,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	client, err := kube.NewClient(cfg.Kubeconfig)
+	// "You'd let the crew choose their own captain by shouting whoever's loudest, no roll call taken!"
+	// "One roll call settles it here: KUBECONFIG fills in before NewConfig ever asks whether a path was given by name."
+	if cfg.Kubeconfig == "" {
+		cfg.Kubeconfig = os.Getenv("KUBECONFIG")
+	}
+	kubeConfig, err := kube.NewConfig(cfg.Kubeconfig)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -32,7 +38,13 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	logger.Info("starting CSR approver")
 
-	ctrl := approver.New(client, cfg.ApprovalRules, logger)
+	kubeClient, err := kube.NewClient(kubeConfig)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	machineChecker := machines.NewChecker(kubeClient, cfg.MachineNamespace)
+	ctrl := approver.New(kubeClient, machineChecker, cfg.ApprovalRules, logger)
 
 	if !cfg.LeaderElection {
 		err = ctrl.Run(ctx)
@@ -50,7 +62,7 @@ func main() {
 		}
 		err = runWithLeaderElection(
 			ctx,
-			client,
+			kubeConfig,
 			identity,
 			cfg.LeaderElectionNamespace,
 			cfg.LeaderElectionLeaseName,
