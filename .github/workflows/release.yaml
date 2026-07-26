@@ -40,6 +40,7 @@ jobs:
           VERSION="${{ github.event.release.tag_name }}"
           VERSION="${VERSION#v}"
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(date -u +%FT%TZ)" >> "$GITHUB_ENV"
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -57,7 +58,7 @@ jobs:
           build-args: |
             VERSION=${{ env.VERSION }}
             COMMIT=${{ github.sha }}
-            BUILD_DATE=${{ github.run_started_at }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
 
       - name: Package Helm chart
         shell: bash
