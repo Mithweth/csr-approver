@@ -4,13 +4,18 @@ import (
 	"context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"os"
 	"time"
 )
 
-func runWithLeaderElection(ctx context.Context, client *kubernetes.Clientset, identity, namespace, leaseName string, run func(context.Context) error) error {
+func runWithLeaderElection(ctx context.Context, config *rest.Config, identity, namespace, leaseName string, run func(context.Context) error) error {
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
 	lock := &resourcelock.LeaseLock{
 		LeaseMeta: metav1.ObjectMeta{
 			Name:      leaseName,

@@ -5,28 +5,33 @@ A small rule-based Kubernetes CertificateSigningRequest approver.
 ## Build
 
 ```bash
-go build -o csr-approver ./cmd/csr-approver
+go build -o csr-approver ./cmd
 ```
 
 ## Run locally
 
-The application tries, in order:
-
-1. `--kubeconfig`
-2. `KUBECONFIG`
-3. `~/.kube/config`
-4. in-cluster ServiceAccount credentials
-
 ```bash
 ./csr-approver \
   --approval-rule='signerName=kubernetes.io/kube-apiserver-client-kubelet,username=system:serviceaccount:openshift-machine-config-operator:node-bootstrapper' \
-  --approval-rule='signerName=kubernetes.io/kubelet-serving'
+  --approval-rule='signerName=kubernetes.io/kubelet-serving,machineValidation=required'
 ```
 
-Each `--approval-rule` requires `signerName`. `username` is optional.
+Each `--approval-rule` requires `signerName`. `username` and `machineValidation` are optional:
 
-## Required permissions
+- `username` — also require a matching CSR requester identity.
+- `machineValidation` — `required` or `disabled` (default `disabled`). When `required`,
+  the CSR's `system:node:<name>` common name must resolve to a ready Cluster API
+  `Machine` named `<name>` in `--machine-namespace` before the rule matches.
 
-The client needs `get`, `list`, and `watch` on
-`certificatesigningrequests`, plus `update` on
-`certificatesigningrequests/approval`.
+`--machine-namespace` sets where those Machines are looked up (default `kube-system`).
+
+## Leader election
+
+Pass `--leader-elect` to safely run more than one replica. `--leader-election-namespace`
+is then required, and `--leader-election-lease-name` defaults to `csr-approver`.
+
+## Helm chart
+
+```bash
+helm install csr-approver ./helm -n kube-system -f my-values.yaml
+```

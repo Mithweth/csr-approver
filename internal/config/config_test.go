@@ -19,6 +19,7 @@ func TestParse(t *testing.T) {
 			want: Config{
 				ApprovalRules:           []rules.ApprovalRule{{SignerName: "example.com/foo"}},
 				LeaderElectionLeaseName: "csr-approver",
+				MachineNamespace:        "kube-system",
 			},
 		},
 		{
@@ -35,6 +36,7 @@ func TestParse(t *testing.T) {
 					{SignerName: "example.com/bar", Username: "alice"},
 				},
 				LeaderElectionLeaseName: "csr-approver",
+				MachineNamespace:        "kube-system",
 			},
 		},
 		{
@@ -50,6 +52,7 @@ func TestParse(t *testing.T) {
 				LeaderElection:          true,
 				LeaderElectionNamespace: "kube-system",
 				LeaderElectionLeaseName: "custom-lease",
+				MachineNamespace:        "kube-system",
 			},
 		},
 		{
@@ -98,7 +101,8 @@ func TestParse(t *testing.T) {
 			if got.Kubeconfig != tt.want.Kubeconfig ||
 				got.LeaderElection != tt.want.LeaderElection ||
 				got.LeaderElectionNamespace != tt.want.LeaderElectionNamespace ||
-				got.LeaderElectionLeaseName != tt.want.LeaderElectionLeaseName {
+				got.LeaderElectionLeaseName != tt.want.LeaderElectionLeaseName ||
+				got.MachineNamespace != tt.want.MachineNamespace {
 				t.Fatalf("Parse(%v) = %+v; want %+v", tt.args, got, tt.want)
 			}
 

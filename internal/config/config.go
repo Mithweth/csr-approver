@@ -14,6 +14,7 @@ type Config struct {
 	LeaderElectionNamespace string
 	LeaderElection          bool
 	LeaderElectionLeaseName string
+	MachineNamespace        string
 }
 
 // Parse reads the application's command-line flags.
@@ -36,7 +37,7 @@ func Parse(args []string) (Config, error) {
 		&approvalRuleValues,
 		"approval-rule",
 		nil,
-		"CSR approval rule; repeatable; format: signerName=<name>[,username=<name>]",
+		"CSR approval rule; repeatable; format: signerName=<name>[,username=<name>][,requireMachine=<bool>]",
 	)
 	flags.BoolVar(
 		&config.LeaderElection,
@@ -55,6 +56,12 @@ func Parse(args []string) (Config, error) {
 		"leader-election-lease-name",
 		"csr-approver",
 		"Lease name for the leader election",
+	)
+	flags.StringVar(
+		&config.MachineNamespace,
+		"machine-namespace",
+		"kube-system",
+		"namespace containing Cluster API Machines used by rules with requireMachine=true",
 	)
 	if err := flags.Parse(args); err != nil {
 		return config, err
