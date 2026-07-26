@@ -54,6 +54,10 @@ jobs:
             org.opencontainers.image.description=Rule-based Kubernetes CSR approver
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ env.VERSION }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.run_started_at }}
 
       - name: Package Helm chart
         shell: bash

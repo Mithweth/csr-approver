@@ -15,6 +15,7 @@ type Config struct {
 	LeaderElection          bool
 	LeaderElectionLeaseName string
 	MachineNamespace        string
+	MetricsBindAddress      string
 }
 
 // Parse reads the application's command-line flags.
@@ -62,6 +63,12 @@ func Parse(args []string) (Config, error) {
 		"machine-namespace",
 		"kube-system",
 		"namespace containing Cluster API Machines used by rules with requireMachine=true",
+	)
+	flags.StringVar(
+		&config.MetricsBindAddress,
+		"metrics-bind-address",
+		"",
+		"enable metrics publishing over the target port (example: :8081)",
 	)
 	if err := flags.Parse(args); err != nil {
 		return config, err

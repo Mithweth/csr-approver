@@ -18,6 +18,14 @@ image:
   pullSecretName: ""
   tag: ""
 
+metrics:
+  enabled: false
+
+service:
+  type: ClusterIP
+  labels: {}
+  annotations: {}
+
 fullnameOverride: ""
 serviceAccount:
   create: true

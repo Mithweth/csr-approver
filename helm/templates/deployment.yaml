@@ -52,6 +52,11 @@ spec:
             - --approval-rule=signerName={{ $rule.signerName }}{{ with $rule.username }},username={{ . }}{{ end }}{{ with $rule.machineValidation }},machineValidation={{ . }}{{ end }}
             {{- end }}
             - --machine-namespace={{ .Values.machineNamespace }}
+            {{- if .Values.metrics.enabled }}
+            - --metrics-bind-address=:8081
+          ports:
+            - containerPort: 8081
+            {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
