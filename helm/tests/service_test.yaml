@@ -1,0 +1,22 @@
+suite: service
+templates:
+  - service.yaml
+release:
+  name: csr-approver
+  namespace: kube-system
+tests:
+  - it: renders nothing when metrics are disabled
+    set:
+      metrics:
+        enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: exposes the named metrics port
+    set:
+      metrics:
+        enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1

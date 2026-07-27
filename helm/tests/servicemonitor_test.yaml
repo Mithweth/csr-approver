@@ -1,0 +1,31 @@
+suite: servicemonitor
+templates:
+  - servicemonitor.yaml
+release:
+  name: csr-approver
+  namespace: kube-system
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders when metrics and ServiceMonitor are enabled
+    set:
+      metrics:
+        enabled: true
+        serviceMonitor:
+          enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+
+  - it: does not render when metrics are disabled
+    set:
+      metrics:
+        enabled: false
+        serviceMonitor:
+          enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0

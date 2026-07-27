@@ -27,7 +27,7 @@ tests:
       approvalRules:
         - signerName: kubernetes.io/kubelet-serving
           machineValidation: required
-      machineNamespace: kube-system
+      machineNamespace: machine-ns
     asserts:
       - hasDocuments:
           count: 1
