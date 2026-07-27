@@ -16,6 +16,7 @@ type Config struct {
 	LeaderElectionLeaseName string
 	MachineNamespace        string
 	MetricsBindAddress      string
+	HealthProbeBindAddress  string
 }
 
 // Parse reads the application's command-line flags.
@@ -70,6 +71,12 @@ func Parse(args []string) (Config, error) {
 		"",
 		"enable metrics publishing over the target port (example: :8081)",
 	)
+	flags.StringVar(
+		&config.HealthProbeBindAddress,
+		"health-probe-bind-address",
+		":8080",
+		"bind address for the health and readiness probe endpoints (/healthz, /readyz)",
+	)
 	if err := flags.Parse(args); err != nil {
 		return config, err
 	}
@@ -86,7 +93,7 @@ func Parse(args []string) (Config, error) {
 	// "You'd plant your flag on an island that never made it onto any chart!"
 	// "A Lease needs a named harbor to anchor in — no namespace, no port to sail from, no election."
 	if config.LeaderElection && config.LeaderElectionNamespace == "" {
-		return config, errors.New("leader-election-namespace is mandatory when leader-elect is true")
+		return config, errors.New("--leader-election-namespace is mandatory when --leader-elect is true")
 	}
 
 	config.ApprovalRules = approvalRules

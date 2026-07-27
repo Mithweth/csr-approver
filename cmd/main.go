@@ -2,16 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/Mithweth/csr-approver/internal/approver"
 	"github.com/Mithweth/csr-approver/internal/config"
@@ -58,31 +53,26 @@ func main() {
 	machineChecker := machines.NewChecker(kubeClient, cfg.MachineNamespace)
 	ctrl := approver.New(kubeClient, machineChecker, cfg.ApprovalRules, logger)
 
-	if cfg.MetricsBindAddress != "" && cfg.MetricsBindAddress != "0" {
-		collector := approver.NewCollector(kubeClient, cfg.ApprovalRules, logger)
-		if err := prometheus.Register(collector); err != nil {
-			logger.Error("failed to register Prometheus collector", "error", err)
+	health := NewHealth(cfg.HealthProbeBindAddress)
+	go func() {
+		logger.Info("starting health server", "address", health.Addr)
+		if err := health.Start(ctx); err != nil {
+			logger.Error("health server failed", "error", err)
 			os.Exit(1)
 		}
-		mux := http.NewServeMux()
-		mux.Handle("/metrics", promhttp.Handler())
-
-		server := &http.Server{
-			Addr:              cfg.MetricsBindAddress,
-			Handler:           mux,
-			ReadHeaderTimeout: 5 * time.Second,
-		}
-
+	}()
+	if cfg.MetricsBindAddress != "" && cfg.MetricsBindAddress != "0" {
+		collector := approver.NewCollector(kubeClient, cfg.ApprovalRules, logger)
+		metrics := NewMetrics(cfg.MetricsBindAddress, collector)
 		go func() {
-			logger.Info("starting metrics server", "address", server.Addr)
-
-			if err := server.ListenAndServe(); err != nil &&
-				!errors.Is(err, http.ErrServerClosed) {
+			logger.Info("starting metrics server", "address", metrics.Addr)
+			if err := metrics.Start(ctx); err != nil {
 				logger.Error("metrics server failed", "error", err)
 				os.Exit(1)
 			}
 		}()
 	}
+
 	if !cfg.LeaderElection {
 		err = ctrl.Run(ctx)
 	} else {

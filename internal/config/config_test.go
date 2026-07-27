@@ -20,6 +20,7 @@ func TestParse(t *testing.T) {
 				ApprovalRules:           []rules.ApprovalRule{{SignerName: "example.com/foo"}},
 				LeaderElectionLeaseName: "csr-approver",
 				MachineNamespace:        "kube-system",
+				HealthProbeBindAddress:  ":8080",
 			},
 		},
 		{
@@ -37,6 +38,7 @@ func TestParse(t *testing.T) {
 				},
 				LeaderElectionLeaseName: "csr-approver",
 				MachineNamespace:        "kube-system",
+				HealthProbeBindAddress:  ":8080",
 			},
 		},
 		{
@@ -53,6 +55,7 @@ func TestParse(t *testing.T) {
 				LeaderElectionNamespace: "kube-system",
 				LeaderElectionLeaseName: "custom-lease",
 				MachineNamespace:        "kube-system",
+				HealthProbeBindAddress:  ":8080",
 			},
 		},
 		{
@@ -71,12 +74,25 @@ func TestParse(t *testing.T) {
 				"--approval-rule", "signerName=example.com/foo",
 				"--leader-elect",
 			},
-			wantErr: "leader-election-namespace is mandatory when leader-elect is true",
+			wantErr: "--leader-election-namespace is mandatory when --leader-elect is true",
 		},
 		{
 			name:    "unknown flag",
 			args:    []string{"--approval-rule", "signerName=example.com/foo", "--does-not-exist"},
 			wantErr: "unknown flag: --does-not-exist",
+		},
+		{
+			name: "custom health probe bind address",
+			args: []string{
+				"--approval-rule", "signerName=example.com/foo",
+				"--health-probe-bind-address", ":9090",
+			},
+			want: Config{
+				ApprovalRules:           []rules.ApprovalRule{{SignerName: "example.com/foo"}},
+				LeaderElectionLeaseName: "csr-approver",
+				MachineNamespace:        "kube-system",
+				HealthProbeBindAddress:  ":9090",
+			},
 		},
 	}
 
@@ -102,7 +118,8 @@ func TestParse(t *testing.T) {
 				got.LeaderElection != tt.want.LeaderElection ||
 				got.LeaderElectionNamespace != tt.want.LeaderElectionNamespace ||
 				got.LeaderElectionLeaseName != tt.want.LeaderElectionLeaseName ||
-				got.MachineNamespace != tt.want.MachineNamespace {
+				got.MachineNamespace != tt.want.MachineNamespace ||
+				got.HealthProbeBindAddress != tt.want.HealthProbeBindAddress {
 				t.Fatalf("Parse(%v) = %+v; want %+v", tt.args, got, tt.want)
 			}
 
