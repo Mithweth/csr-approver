@@ -15,9 +15,10 @@ metadata:
   {{- end }}
 spec:
   ports:
-  - port: 8081
+  - name: metrics
+    port: 8081
     protocol: TCP
-    targetPort: 8081
+    targetPort: metrics
   type: {{ .Values.service.type }}
   selector:
     {{- include "csr-approver.selectorLabels" . | nindent 4 }}

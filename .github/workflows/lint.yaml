@@ -49,9 +49,8 @@ jobs:
 
       - name: Run chart-testing (list-changed)
         id: list-changed
-        working-directory: ./helm
         run: |
-          changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})
+          changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }} --chart-dirs .)
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -59,7 +58,10 @@ jobs:
       - name: Run chart-testing (lint)
         if: steps.list-changed.outputs.changed == 'true'
         working-directory: ./helm
-        run: ct lint --target-branch ${{ github.event.repository.default_branch }}
+        run: |
+          ct lint --target-branch ${{ github.event.repository.default_branch }} \
+            --chart-yaml-schema configs/chart_schema.yaml \
+            --config configs/ct-lint.yaml --lint-conf configs/lintconf.yaml
 
       - name: Create kind cluster
         if: steps.list-changed.outputs.changed == 'true'
@@ -68,4 +70,7 @@ jobs:
       - name: Run chart-testing (install)
         if: steps.list-changed.outputs.changed == 'true'
         working-directory: ./helm
-        run: ct install --target-branch ${{ github.event.repository.default_branch }}
+        run: |
+          ct install --target-branch ${{ github.event.repository.default_branch }} \
+            --config configs/ct-lint.yaml --charts .
+

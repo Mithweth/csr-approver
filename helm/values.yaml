@@ -1,15 +1,17 @@
 replicaCount: 3
 
-# Each approvalRules requires signerName. username and machineValidation are optional.
-# machineValidation check a cluster-API Machine whose name matchs CSR common name.
-# You need at least one rule so the application works
+# Each approval rule requires signerName.
+# username and machineValidation are optional.
+# machineValidation checks for a Cluster API Machine whose name matches
+# the common name contained in the CSR.
+# At least one rule is required for the application to approve CSRs.
 approvalRules:
   - signerName: kubernetes.io/kube-apiserver-client-kubelet
     username: system:serviceaccount:openshift-machine-config-operator:node-bootstrapper
     # machineValidation: required  # required, disabled
   - signerName: kubernetes.io/kubelet-serving
 
-# The namespace where cluster-API Machines are located
+# Namespace containing the Cluster API Machines.
 machineNamespace: kube-system
 
 image:
@@ -20,6 +22,11 @@ image:
 
 metrics:
   enabled: false
+  serviceMonitor:
+    enabled: false
+    labels: {}
+    annotations: {}
+    interval: 30s
 
 service:
   type: ClusterIP
