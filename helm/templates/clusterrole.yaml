@@ -5,6 +5,13 @@ metadata:
   name: {{ include "csr-approver.fullname" . }}
 rules:
   - apiGroups:
+      - events.k8s.io
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
       - certificates.k8s.io
     resources:
       - certificatesigningrequests

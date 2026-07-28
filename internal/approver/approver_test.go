@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"strings"
 	"testing"
 
 	"github.com/Mithweth/csr-approver/internal/machines"
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -24,6 +26,10 @@ import (
 
 func discardLogger() logr.Logger {
 	return logr.Discard()
+}
+
+func newRecorder() *events.FakeRecorder {
+	return events.NewFakeRecorder(10)
 }
 
 func newCSR(name, signerName, username string, conditions ...certificatesv1.CertificateSigningRequestCondition) *certificatesv1.CertificateSigningRequest {
@@ -121,7 +127,7 @@ func TestIsPending(t *testing.T) {
 func TestApprover_MatchingRule(t *testing.T) {
 	rule1 := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.ValidationValueDisabled}
 	rule2 := rules.ApprovalRule{SignerName: "example.com/bar", Username: "alice", MachineValidation: rules.ValidationValueDisabled}
-	a := New(newFakeClient(t), nil, []rules.ApprovalRule{rule1, rule2}, discardLogger())
+	a := New(newFakeClient(t), nil, []rules.ApprovalRule{rule1, rule2}, newRecorder(), discardLogger())
 
 	tests := []struct {
 		name      string
@@ -156,7 +162,7 @@ func TestApprover_MatchingRule(t *testing.T) {
 // if both were disabled, rather than requiring validation.
 func TestApprover_MatchingRule_UnsetValidationDefaultsToDisabled(t *testing.T) {
 	rule := rules.ApprovalRule{SignerName: "example.com/foo"}
-	a := New(newFakeClient(t), nil, []rules.ApprovalRule{rule}, discardLogger())
+	a := New(newFakeClient(t), nil, []rules.ApprovalRule{rule}, newRecorder(), discardLogger())
 
 	csr := newCSR("csr", "example.com/foo", "anyone")
 
@@ -178,7 +184,8 @@ func TestApprover_Process(t *testing.T) {
 	t.Run("approves a pending matching CSR", func(t *testing.T) {
 		csr := newCSR("csr-1", "example.com/foo", "alice")
 		kubeClient := newFakeClient(t, csr)
-		a := New(kubeClient, nil, []rules.ApprovalRule{rule}, discardLogger())
+		recorder := newRecorder()
+		a := New(kubeClient, nil, []rules.ApprovalRule{rule}, recorder, discardLogger())
 
 		result, err := a.Process(context.Background(), csr)
 		if err != nil {
@@ -195,12 +202,21 @@ func TestApprover_Process(t *testing.T) {
 		if !hasApprovedCondition(&updated) {
 			t.Fatalf("CSR %q was not approved", updated.Name)
 		}
+
+		select {
+		case event := <-recorder.Events:
+			if !strings.Contains(event, "Approved") {
+				t.Fatalf("recorded event = %q; want it to mention Approved", event)
+			}
+		default:
+			t.Fatal("expected an Approved event to be recorded")
+		}
 	})
 
 	t.Run("ignores a CSR that does not match", func(t *testing.T) {
 		csr := newCSR("csr-2", "example.com/other", "alice")
 		kubeClient := newFakeClient(t, csr)
-		a := New(kubeClient, nil, []rules.ApprovalRule{rule}, discardLogger())
+		a := New(kubeClient, nil, []rules.ApprovalRule{rule}, newRecorder(), discardLogger())
 
 		result, err := a.Process(context.Background(), csr)
 		if err != nil {
@@ -228,6 +244,7 @@ func TestApprover_Process(t *testing.T) {
 			kubeClient,
 			fakeMachineChecker{result: machines.ResultReady},
 			[]rules.ApprovalRule{machineRule},
+			newRecorder(),
 			discardLogger(),
 		)
 
@@ -257,6 +274,7 @@ func TestApprover_Process(t *testing.T) {
 			kubeClient,
 			fakeMachineChecker{result: machines.ResultNotFound},
 			[]rules.ApprovalRule{machineRule},
+			newRecorder(),
 			discardLogger(),
 		)
 
@@ -282,7 +300,7 @@ func TestApprover_Process(t *testing.T) {
 		csr := newCSR("csr-cn-match", "example.com/foo", "system:node:worker-1")
 		setCSRCommonName(t, csr, "system:node:worker-1")
 		kubeClient := newFakeClient(t, csr)
-		a := New(kubeClient, nil, []rules.ApprovalRule{commonNameRule}, discardLogger())
+		a := New(kubeClient, nil, []rules.ApprovalRule{commonNameRule}, newRecorder(), discardLogger())
 
 		result, err := a.Process(context.Background(), csr)
 		if err != nil {
@@ -306,7 +324,7 @@ func TestApprover_Process(t *testing.T) {
 		csr := newCSR("csr-cn-mismatch", "example.com/foo", "alice")
 		setCSRCommonName(t, csr, "system:node:worker-1")
 		kubeClient := newFakeClient(t, csr)
-		a := New(kubeClient, nil, []rules.ApprovalRule{commonNameRule}, discardLogger())
+		a := New(kubeClient, nil, []rules.ApprovalRule{commonNameRule}, newRecorder(), discardLogger())
 
 		result, err := a.Process(context.Background(), csr)
 		if err != nil {
@@ -330,7 +348,7 @@ func TestApprover_Reconcile(t *testing.T) {
 	rule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.ValidationValueDisabled}
 	csr := newCSR("csr-reconcile", "example.com/foo", "alice")
 	kubeClient := newFakeClient(t, csr)
-	a := New(kubeClient, nil, []rules.ApprovalRule{rule}, discardLogger())
+	a := New(kubeClient, nil, []rules.ApprovalRule{rule}, newRecorder(), discardLogger())
 
 	_, err := a.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: types.NamespacedName{Name: csr.Name},

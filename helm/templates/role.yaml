@@ -14,6 +14,7 @@ rules:
       - get
       - create
       - update
+  {{- /* Not migrated to events.k8s.io https://github.com/kubernetes/kubernetes/issues/82846 */}}
   - apiGroups:
       - ""
     resources:

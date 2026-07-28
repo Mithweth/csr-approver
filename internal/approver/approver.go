@@ -17,6 +17,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -33,14 +34,16 @@ type Approver struct {
 	client         client.Client
 	machineChecker machines.Checker
 	rules          []rules.ApprovalRule
+	recorder       events.EventRecorder
 	logger         logr.Logger
 }
 
-func New(kubeClient client.Client, machineChecker machines.Checker, approvalRules []rules.ApprovalRule, logger logr.Logger) *Approver {
+func New(kubeClient client.Client, machineChecker machines.Checker, approvalRules []rules.ApprovalRule, recorder events.EventRecorder, logger logr.Logger) *Approver {
 	return &Approver{
 		client:         kubeClient,
 		machineChecker: machineChecker,
 		rules:          approvalRules,
+		recorder:       recorder,
 		logger:         logger,
 	}
 }
@@ -86,7 +89,6 @@ func (a *Approver) Process(ctx context.Context, csr *certificatesv1.CertificateS
 	if waiting {
 		return ProcessWaiting, nil
 	}
-
 	return ProcessDone, nil
 }
 
@@ -170,7 +172,8 @@ func (a *Approver) approve(ctx context.Context, csr *certificatesv1.CertificateS
 		return fmt.Errorf("approve CSR %q: %w", csr.Name, err)
 	}
 
-	a.logger.Info("CSR approved", "name", csr.Name, "signerName", csr.Spec.SignerName, "username", csr.Spec.Username)
+	a.logger.Info("CSR approved", "name", updatedCSR.Name, "signerName", updatedCSR.Spec.SignerName, "username", updatedCSR.Spec.Username)
+	a.recorder.Eventf(updatedCSR, nil, corev1.EventTypeNormal, "Approved", "Approve", "CSR matched approval rule: %s", rule)
 	return nil
 }
 
