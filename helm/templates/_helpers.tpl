@@ -35,3 +35,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{- define "csr-approver.needsMachineRole" -}}
+{{- $needsMachineRole := false -}}
+{{- range .Values.approvalRules -}}
+{{- if eq .machineValidation "required" -}}
+{{- $needsMachineRole = true -}}
+{{- end -}}
+{{- end -}}
+{{- $needsMachineRole }}
+{{- end -}}

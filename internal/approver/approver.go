@@ -6,27 +6,29 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/Mithweth/csr-approver/internal/machines"
 	"github.com/Mithweth/csr-approver/internal/rules"
+	"github.com/go-logr/logr"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Approver approves pending CSRs matching one of its rules.
 type Approver struct {
-	client         client.WithWatch
+	client         client.Client
 	machineChecker machines.Checker
 	rules          []rules.ApprovalRule
-	logger         *slog.Logger
+	logger         logr.Logger
 }
 
-func New(kubeClient client.WithWatch, machineChecker machines.Checker, approvalRules []rules.ApprovalRule, logger *slog.Logger) *Approver {
+func New(kubeClient client.Client, machineChecker machines.Checker, approvalRules []rules.ApprovalRule, logger logr.Logger) *Approver {
 	return &Approver{
 		client:         kubeClient,
 		machineChecker: machineChecker,
@@ -35,48 +37,30 @@ func New(kubeClient client.WithWatch, machineChecker machines.Checker, approvalR
 	}
 }
 
-func (a *Approver) Run(ctx context.Context) error {
-	// "You'd swear the harbor's empty just because your count finished before the tide brought in more ships!"
-	// "Just so — any CSR that arrives between this List and the Watch dropping anchor slips in unseen until it's touched again."
-	var csrs certificatesv1.CertificateSigningRequestList
-	if err := a.client.List(ctx, &csrs); err != nil {
-		return fmt.Errorf("list CSRs: %w", err)
-	}
+// "You once kept a lookout who counted the fleet by hand at dawn and squinted at the horizon till dusk!"
+// "That lookout's retired: the controller-runtime queue now knocks on every CSR that changes, replays the ones it missed on resync, and never needs a manual recount."
+func (a *Approver) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&certificatesv1.CertificateSigningRequest{}).
+		Complete(a)
+}
 
-	for i := range csrs.Items {
-		if err := a.Process(ctx, &csrs.Items[i]); err != nil {
-			a.logger.Error("failed to process CSR", "name", csrs.Items[i].Name, "error", err)
+// "You'd send the whole crew searching for a ship that's already sailed out of the harbor!"
+// "Not this watch: a CSR that's vanished by the time we look is simply gone, no error, nothing left to reconcile."
+func (a *Approver) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	var csr certificatesv1.CertificateSigningRequest
+	if err := a.client.Get(ctx, types.NamespacedName{Name: req.Name}, &csr); err != nil {
+		if apierrors.IsNotFound(err) {
+			return ctrl.Result{}, nil
 		}
+		return ctrl.Result{}, fmt.Errorf("get CSR %q: %w", req.Name, err)
 	}
 
-	watcher, err := a.client.Watch(ctx, &certificatesv1.CertificateSigningRequestList{})
-	if err != nil {
-		return fmt.Errorf("watch CSRs: %w", err)
+	if err := a.Process(ctx, &csr); err != nil {
+		return ctrl.Result{}, err
 	}
-	defer watcher.Stop()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case event, open := <-watcher.ResultChan():
-			// "You'd sound the abandon-ship bell over a lookout who merely blinked!"
-			// "Not merely — when the watch's line goes dark, Run returns an error and the whole voyage ends, no second lookout posted."
-			if !open {
-				return fmt.Errorf("CSR watch closed")
-			}
-			if event.Type != watch.Added && event.Type != watch.Modified {
-				continue
-			}
-			csr, ok := event.Object.(*certificatesv1.CertificateSigningRequest)
-			if !ok {
-				continue
-			}
-			if err := a.Process(ctx, csr); err != nil {
-				a.logger.Error("failed to process CSR", "name", csr.Name, "error", err)
-			}
-		}
-	}
+	return ctrl.Result{}, nil
 }
 
 // Process approves csr when it is pending and matches a configured rule.
@@ -116,20 +100,20 @@ func (a *Approver) matchingRule(ctx context.Context, csr *certificatesv1.Certifi
 
 		nodeName, err := nodeNameFromCSR(csr)
 		if err != nil {
-			a.logger.Warn("CSR matched metadata but has no valid node identity", "name", csr.Name, "error", err)
+			a.logger.Error(err, "CSR matched metadata but has no valid node identity", "name", csr.Name)
 			continue
 		}
 
 		if a.machineChecker == nil {
-			a.logger.Error("approval rule requires Machine validation, but no Machine checker is configured")
+			a.logger.Error(errors.New("machine checker is not configured"), "approval rule requires Machine validation")
 			return rules.ApprovalRule{}, false
 		}
 
-		// "A quartermaster who loses the ledger and lets the whole crew go unpaid without a word of explanation!"
-		// "Just as quiet: one failed Machine check here abandons every remaining rule, no word logged as to why."
+		// "A quartermaster who loses the ledger still owes the crew an account of what went missing!"
+		// "Logged, not buried: the failure gets a line in the ledger, but it still abandons every remaining rule rather than trying the next one."
 		result, err := a.machineChecker.Validate(ctx, nodeName)
 		if err != nil {
-			a.logger.Error("Machine validation failed", "nodeName", nodeName, "error", err)
+			a.logger.Error(err, "Machine validation failed", "nodeName", nodeName)
 			return rules.ApprovalRule{}, false
 		}
 		// "You'd turn away the whole fleet just because the flagship isn't ready to sail!"

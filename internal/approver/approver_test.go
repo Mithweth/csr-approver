@@ -7,23 +7,23 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"io"
-	"log/slog"
 	"testing"
 
 	"github.com/Mithweth/csr-approver/internal/machines"
 	"github.com/Mithweth/csr-approver/internal/rules"
+	"github.com/go-logr/logr"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func discardLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+func discardLogger() logr.Logger {
+	return logr.Discard()
 }
 
 func newCSR(name, signerName, username string, conditions ...certificatesv1.CertificateSigningRequestCondition) *certificatesv1.CertificateSigningRequest {
@@ -55,7 +55,7 @@ func setCSRCommonName(t *testing.T, csr *certificatesv1.CertificateSigningReques
 	csr.Spec.Request = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: request})
 }
 
-func newFakeClient(t *testing.T, objects ...client.Object) client.WithWatch {
+func newFakeClient(t *testing.T, objects ...client.Object) client.Client {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
@@ -255,4 +255,33 @@ func TestApprover_Process(t *testing.T) {
 			t.Fatal("CSR was unexpectedly approved")
 		}
 	})
+}
+
+func TestApprover_Reconcile(t *testing.T) {
+	rule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.MachineValidationDisabled}
+	csr := newCSR("csr-reconcile", "example.com/foo", "alice")
+	kubeClient := newFakeClient(t, csr)
+	a := New(kubeClient, nil, []rules.ApprovalRule{rule}, discardLogger())
+
+	_, err := a.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: csr.Name},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile() unexpected error: %v", err)
+	}
+
+	var updated certificatesv1.CertificateSigningRequest
+	if err := kubeClient.Get(context.Background(), types.NamespacedName{Name: csr.Name}, &updated); err != nil {
+		t.Fatal(err)
+	}
+	if !hasApprovedCondition(&updated) {
+		t.Fatalf("CSR %q was not approved", updated.Name)
+	}
+
+	_, err = a.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: "missing"},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile() missing object error = %v; want nil", err)
+	}
 }

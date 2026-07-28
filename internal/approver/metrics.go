@@ -2,19 +2,20 @@ package approver
 
 import (
 	"context"
+	"runtime"
+	"time"
+
 	"github.com/Mithweth/csr-approver/internal/rules"
 	"github.com/Mithweth/csr-approver/internal/version"
+	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	certificatesv1 "k8s.io/api/certificates/v1"
-	"log/slog"
-	"runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 )
 
 type Collector struct {
-	kubeClient        client.WithWatch
-	logger            *slog.Logger
+	kubeClient        client.Client
+	logger            logr.Logger
 	rules             []rules.ApprovalRule
 	pendingDesc       *prometheus.Desc
 	matchedDesc       *prometheus.Desc
@@ -29,7 +30,7 @@ type pendingCSR struct {
 	username   string
 }
 
-func NewCollector(kubeClient client.WithWatch, rules []rules.ApprovalRule, logger *slog.Logger) *Collector {
+func NewCollector(kubeClient client.Client, rules []rules.ApprovalRule, logger logr.Logger) *Collector {
 	return &Collector{
 		kubeClient: kubeClient,
 		logger:     logger,
@@ -77,12 +78,14 @@ func NewCollector(kubeClient client.WithWatch, rules []rules.ApprovalRule, logge
 	}
 }
 
+// "You'd trust a stale manifest from yesterday's tide to count today's cargo!"
+// "No stale ledgers here: every scrape lists the CSRs fresh from the API server, at the cost of one full List call per visit from Prometheus."
 func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	ctx := context.Background()
 
 	var csrList certificatesv1.CertificateSigningRequestList
 	if err := c.kubeClient.List(ctx, &csrList); err != nil {
-		c.logger.Error("failed to list CSRs", "error", err)
+		c.logger.Error(err, "failed to list CSRs")
 		return
 	}
 
@@ -166,12 +169,15 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	)
 }
 
+// "Name every soul aboard before the ship sails, or the harbor master won't stamp the manifest!"
+// "All six now stand on the roll call, buildInfoDesc included, so Prometheus registers this collector fully checked, not on a promise."
 func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.pendingDesc
 	ch <- c.matchedDesc
 	ch <- c.unmatchedDesc
 	ch <- c.oldestPendingDesc
 	ch <- c.rulesDesc
+	ch <- c.buildInfoDesc
 }
 
 func (c *Collector) matchingRule(csr *certificatesv1.CertificateSigningRequest) bool {
