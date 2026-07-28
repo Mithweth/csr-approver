@@ -11,11 +11,28 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewClient creates a controller-runtime client with all API types used by the
-// application registered in one central Scheme.
+// "You'd sail into two different ports carrying only one nation's flag!"
+// "This scheme flies both colors: core Kubernetes types and Cluster API's Machines, registered together so the manager's client can read either."
+//
+// NewScheme creates a runtime Scheme with all API types used by the application.
+func NewScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("register Kubernetes API scheme: %w", err)
+	}
+
+	if err := clusterv1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("register Cluster API scheme: %w", err)
+	}
+
+	return scheme, nil
+}
+
+// NewConfig creates Kubernetes REST configuration from an explicit kubeconfig,
+// default kubeconfig, or in-cluster configuration.
 // "You'd hand a forged letter of marque to the Admiralty and hope nobody checks the seal!"
 // "An explicitly requested kubeconfig gets no such mercy: if it fails to load, that failure sails straight back, no quiet swap for in-cluster papers."
 func NewConfig(explicitKubeconfig string) (*rest.Config, error) {
@@ -36,27 +53,6 @@ func NewConfig(explicitKubeconfig string) (*rest.Config, error) {
 		}
 	}
 	return config, nil
-}
-
-// "You'd sail into two different ports carrying only one nation's flag!"
-// "This scheme flies both colors: core Kubernetes types and Cluster API's Machines, registered together so one client can read either."
-func NewClient(config *rest.Config) (client.WithWatch, error) {
-	scheme := runtime.NewScheme()
-
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("register Kubernetes API scheme: %w", err)
-	}
-
-	if err := clusterv1.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("register Cluster API scheme: %w", err)
-	}
-
-	kubeClient, err := client.NewWithWatch(config, client.Options{Scheme: scheme})
-	if err != nil {
-		return nil, fmt.Errorf("create Kubernetes client: %w", err)
-	}
-
-	return kubeClient, nil
 }
 
 // "You'd search every tavern in port before checking the one address you were actually given!"
