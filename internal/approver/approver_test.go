@@ -119,8 +119,8 @@ func TestIsPending(t *testing.T) {
 }
 
 func TestApprover_MatchingRule(t *testing.T) {
-	rule1 := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.MachineValidationDisabled}
-	rule2 := rules.ApprovalRule{SignerName: "example.com/bar", Username: "alice", MachineValidation: rules.MachineValidationDisabled}
+	rule1 := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.ValidationValueDisabled}
+	rule2 := rules.ApprovalRule{SignerName: "example.com/bar", Username: "alice", MachineValidation: rules.ValidationValueDisabled}
 	a := New(newFakeClient(t), nil, []rules.ApprovalRule{rule1, rule2}, discardLogger())
 
 	tests := []struct {
@@ -136,9 +136,12 @@ func TestApprover_MatchingRule(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRule, gotFound := a.matchingRule(context.Background(), tt.csr)
+			gotRule, gotFound, gotWaiting := a.matchingRule(context.Background(), tt.csr)
 			if gotFound != tt.wantFound {
 				t.Fatalf("matchingRule() found = %v; want %v", gotFound, tt.wantFound)
+			}
+			if gotWaiting {
+				t.Fatalf("matchingRule() waiting = true; want false")
 			}
 			if gotFound && gotRule != tt.wantRule {
 				t.Fatalf("matchingRule() rule = %+v; want %+v", gotRule, tt.wantRule)
@@ -147,20 +150,22 @@ func TestApprover_MatchingRule(t *testing.T) {
 	}
 }
 
-// Regression test for a reported bug: MachineValidation's zero value ("")
-// is not equal to MachineValidationDisabled ("disabled"), so a rule that
-// never sets the field falls through into requiring machine validation
-// instead of skipping it. This currently FAILS against the code as written
-// — it documents the bug rather than papering over it.
-func TestApprover_MatchingRule_UnsetMachineValidationDefaultsToDisabled(t *testing.T) {
+// Regression test for a reported bug: ValidationValue's zero value ("")
+// is not equal to ValidationValueDisabled ("disabled"), so a rule that
+// never sets MachineValidation/CommonNameValidation must still behave as
+// if both were disabled, rather than requiring validation.
+func TestApprover_MatchingRule_UnsetValidationDefaultsToDisabled(t *testing.T) {
 	rule := rules.ApprovalRule{SignerName: "example.com/foo"}
 	a := New(newFakeClient(t), nil, []rules.ApprovalRule{rule}, discardLogger())
 
 	csr := newCSR("csr", "example.com/foo", "anyone")
 
-	gotRule, gotFound := a.matchingRule(context.Background(), csr)
+	gotRule, gotFound, gotWaiting := a.matchingRule(context.Background(), csr)
 	if !gotFound {
-		t.Fatalf("matchingRule() found = false; want true (unset MachineValidation should behave like %q)", rules.MachineValidationDisabled)
+		t.Fatalf("matchingRule() found = false; want true (unset validation should behave like %q)", rules.ValidationValueDisabled)
+	}
+	if gotWaiting {
+		t.Fatalf("matchingRule() waiting = true; want false")
 	}
 	if gotRule != rule {
 		t.Fatalf("matchingRule() rule = %+v; want %+v", gotRule, rule)
@@ -168,15 +173,19 @@ func TestApprover_MatchingRule_UnsetMachineValidationDefaultsToDisabled(t *testi
 }
 
 func TestApprover_Process(t *testing.T) {
-	rule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.MachineValidationDisabled}
+	rule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.ValidationValueDisabled}
 
 	t.Run("approves a pending matching CSR", func(t *testing.T) {
 		csr := newCSR("csr-1", "example.com/foo", "alice")
 		kubeClient := newFakeClient(t, csr)
 		a := New(kubeClient, nil, []rules.ApprovalRule{rule}, discardLogger())
 
-		if err := a.Process(context.Background(), csr); err != nil {
+		result, err := a.Process(context.Background(), csr)
+		if err != nil {
 			t.Fatalf("Process() unexpected error: %v", err)
+		}
+		if result != ProcessDone {
+			t.Fatalf("Process() result = %v; want ProcessDone", result)
 		}
 
 		var updated certificatesv1.CertificateSigningRequest
@@ -193,8 +202,12 @@ func TestApprover_Process(t *testing.T) {
 		kubeClient := newFakeClient(t, csr)
 		a := New(kubeClient, nil, []rules.ApprovalRule{rule}, discardLogger())
 
-		if err := a.Process(context.Background(), csr); err != nil {
+		result, err := a.Process(context.Background(), csr)
+		if err != nil {
 			t.Fatalf("Process() unexpected error: %v", err)
+		}
+		if result != ProcessDone {
+			t.Fatalf("Process() result = %v; want ProcessDone", result)
 		}
 
 		var updated certificatesv1.CertificateSigningRequest
@@ -207,7 +220,7 @@ func TestApprover_Process(t *testing.T) {
 	})
 
 	t.Run("approves when the required Machine is ready", func(t *testing.T) {
-		machineRule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.MachineValidationRequired}
+		machineRule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.ValidationValueRequired}
 		csr := newCSR("csr-machine", "example.com/foo", "alice")
 		setCSRCommonName(t, csr, "system:node:worker-1")
 		kubeClient := newFakeClient(t, csr)
@@ -218,8 +231,12 @@ func TestApprover_Process(t *testing.T) {
 			discardLogger(),
 		)
 
-		if err := a.Process(context.Background(), csr); err != nil {
+		result, err := a.Process(context.Background(), csr)
+		if err != nil {
 			t.Fatalf("Process() unexpected error: %v", err)
+		}
+		if result != ProcessDone {
+			t.Fatalf("Process() result = %v; want ProcessDone", result)
 		}
 
 		var updated certificatesv1.CertificateSigningRequest
@@ -232,7 +249,7 @@ func TestApprover_Process(t *testing.T) {
 	})
 
 	t.Run("waits when the required Machine is absent", func(t *testing.T) {
-		machineRule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.MachineValidationRequired}
+		machineRule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.ValidationValueRequired}
 		csr := newCSR("csr-no-machine", "example.com/foo", "alice")
 		setCSRCommonName(t, csr, "system:node:worker-1")
 		kubeClient := newFakeClient(t, csr)
@@ -243,8 +260,60 @@ func TestApprover_Process(t *testing.T) {
 			discardLogger(),
 		)
 
-		if err := a.Process(context.Background(), csr); err != nil {
+		result, err := a.Process(context.Background(), csr)
+		if err != nil {
 			t.Fatalf("Process() unexpected error: %v", err)
+		}
+		if result != ProcessWaiting {
+			t.Fatalf("Process() result = %v; want ProcessWaiting", result)
+		}
+
+		var updated certificatesv1.CertificateSigningRequest
+		if err := kubeClient.Get(context.Background(), types.NamespacedName{Name: csr.Name}, &updated); err != nil {
+			t.Fatal(err)
+		}
+		if hasApprovedCondition(&updated) {
+			t.Fatal("CSR was unexpectedly approved")
+		}
+	})
+
+	t.Run("approves when the common name matches the username", func(t *testing.T) {
+		commonNameRule := rules.ApprovalRule{SignerName: "example.com/foo", CommonNameValidation: rules.ValidationValueRequired}
+		csr := newCSR("csr-cn-match", "example.com/foo", "system:node:worker-1")
+		setCSRCommonName(t, csr, "system:node:worker-1")
+		kubeClient := newFakeClient(t, csr)
+		a := New(kubeClient, nil, []rules.ApprovalRule{commonNameRule}, discardLogger())
+
+		result, err := a.Process(context.Background(), csr)
+		if err != nil {
+			t.Fatalf("Process() unexpected error: %v", err)
+		}
+		if result != ProcessDone {
+			t.Fatalf("Process() result = %v; want ProcessDone", result)
+		}
+
+		var updated certificatesv1.CertificateSigningRequest
+		if err := kubeClient.Get(context.Background(), types.NamespacedName{Name: csr.Name}, &updated); err != nil {
+			t.Fatal(err)
+		}
+		if !hasApprovedCondition(&updated) {
+			t.Fatal("CSR was not approved")
+		}
+	})
+
+	t.Run("rejects when the common name does not match the username", func(t *testing.T) {
+		commonNameRule := rules.ApprovalRule{SignerName: "example.com/foo", CommonNameValidation: rules.ValidationValueRequired}
+		csr := newCSR("csr-cn-mismatch", "example.com/foo", "alice")
+		setCSRCommonName(t, csr, "system:node:worker-1")
+		kubeClient := newFakeClient(t, csr)
+		a := New(kubeClient, nil, []rules.ApprovalRule{commonNameRule}, discardLogger())
+
+		result, err := a.Process(context.Background(), csr)
+		if err != nil {
+			t.Fatalf("Process() unexpected error: %v", err)
+		}
+		if result != ProcessDone {
+			t.Fatalf("Process() result = %v; want ProcessDone", result)
 		}
 
 		var updated certificatesv1.CertificateSigningRequest
@@ -258,7 +327,7 @@ func TestApprover_Process(t *testing.T) {
 }
 
 func TestApprover_Reconcile(t *testing.T) {
-	rule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.MachineValidationDisabled}
+	rule := rules.ApprovalRule{SignerName: "example.com/foo", MachineValidation: rules.ValidationValueDisabled}
 	csr := newCSR("csr-reconcile", "example.com/foo", "alice")
 	kubeClient := newFakeClient(t, csr)
 	a := New(kubeClient, nil, []rules.ApprovalRule{rule}, discardLogger())

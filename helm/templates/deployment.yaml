@@ -49,7 +49,7 @@ spec:
             - --leader-election-lease-name={{ include "csr-approver.fullname" . }}
             {{- end }}
             {{- range $rule := .Values.approvalRules }}
-            - --approval-rule=signerName={{ $rule.signerName }}{{ with $rule.username }},username={{ . }}{{ end }}{{ with $rule.machineValidation }},machineValidation={{ . }}{{ end }}
+            - --approval-rule=signerName={{ $rule.signerName }}{{ with $rule.username }},username={{ . }}{{ end }}{{ with $rule.machineValidation }},machineValidation={{ . }}{{ end }}{{ with $rule.commonNameValidation }},commonNameValidation={{ . }}{{ end }}
             {{- end }}
             - --machine-namespace={{ .Values.machineNamespace }}
             {{- if .Values.metrics.enabled }}
