@@ -39,7 +39,7 @@ func Parse(args []string) (Config, error) {
 		&approvalRuleValues,
 		"approval-rule",
 		nil,
-		"CSR approval rule; repeatable; format: signerName=<name>[,username=<name>][,requireMachine=<bool>]",
+		"CSR approval rule; repeatable; format: signerName=<name>[,username=<name>][,machineValidation=required][,commonNameValidation=required]",
 	)
 	flags.BoolVar(
 		&config.LeaderElection,
@@ -63,7 +63,7 @@ func Parse(args []string) (Config, error) {
 		&config.MachineNamespace,
 		"machine-namespace",
 		"kube-system",
-		"namespace containing Cluster API Machines used by rules with requireMachine=true",
+		"namespace containing Cluster API Machines used by rules with machineValidation=required",
 	)
 	flags.StringVar(
 		&config.MetricsBindAddress,

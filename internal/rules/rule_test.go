@@ -26,12 +26,22 @@ func TestParse(t *testing.T) {
 		{
 			name:  "machine validation required",
 			value: "signerName=example.com/foo,machineValidation=required",
-			want:  ApprovalRule{SignerName: "example.com/foo", MachineValidation: MachineValidationRequired},
+			want:  ApprovalRule{SignerName: "example.com/foo", MachineValidation: ValidationValueRequired},
 		},
 		{
 			name:  "machine validation explicitly disabled",
 			value: "signerName=example.com/foo,machineValidation=disabled",
-			want:  ApprovalRule{SignerName: "example.com/foo", MachineValidation: MachineValidationDisabled},
+			want:  ApprovalRule{SignerName: "example.com/foo", MachineValidation: ValidationValueDisabled},
+		},
+		{
+			name:  "common name validation required",
+			value: "signerName=example.com/foo,commonNameValidation=required",
+			want:  ApprovalRule{SignerName: "example.com/foo", CommonNameValidation: ValidationValueRequired},
+		},
+		{
+			name:  "common name validation explicitly disabled",
+			value: "signerName=example.com/foo,commonNameValidation=disabled",
+			want:  ApprovalRule{SignerName: "example.com/foo", CommonNameValidation: ValidationValueDisabled},
 		},
 		{
 			name:  "surrounding whitespace is trimmed",
@@ -62,6 +72,11 @@ func TestParse(t *testing.T) {
 			name:    "invalid machine validation value",
 			value:   "signerName=example.com/foo,machineValidation=maybe",
 			wantErr: `invalid machineValidation value "maybe": expected "disabled" or "required"`,
+		},
+		{
+			name:    "invalid common name validation value",
+			value:   "signerName=example.com/foo,commonNameValidation=maybe",
+			wantErr: `invalid commonNameValidation value "maybe": expected "disabled" or "required"`,
 		},
 		{
 			name:    "unknown field",
@@ -160,13 +175,23 @@ func TestApprovalRule_String(t *testing.T) {
 		},
 		{
 			name: "machine validation required",
-			rule: ApprovalRule{SignerName: "example.com/foo", MachineValidation: MachineValidationRequired},
+			rule: ApprovalRule{SignerName: "example.com/foo", MachineValidation: ValidationValueRequired},
 			want: "signerName=example.com/foo,machineValidation=required",
 		},
 		{
 			name: "machine validation disabled is omitted",
-			rule: ApprovalRule{SignerName: "example.com/foo", MachineValidation: MachineValidationDisabled},
+			rule: ApprovalRule{SignerName: "example.com/foo", MachineValidation: ValidationValueDisabled},
 			want: "signerName=example.com/foo",
+		},
+		{
+			name: "common name validation required",
+			rule: ApprovalRule{SignerName: "example.com/foo", CommonNameValidation: ValidationValueRequired},
+			want: "signerName=example.com/foo,commonNameValidation=required",
+		},
+		{
+			name: "machine and common name validation both required",
+			rule: ApprovalRule{SignerName: "example.com/foo", MachineValidation: ValidationValueRequired, CommonNameValidation: ValidationValueRequired},
+			want: "signerName=example.com/foo,machineValidation=required,commonNameValidation=required",
 		},
 	}
 

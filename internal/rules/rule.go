@@ -7,19 +7,20 @@ import (
 	"strings"
 )
 
-type MachineValidation string
+type ValidationValue string
 
 const (
-	MachineValidationUnset    MachineValidation = ""
-	MachineValidationDisabled MachineValidation = "disabled"
-	MachineValidationRequired MachineValidation = "required"
+	ValidationValueUnset    ValidationValue = ""
+	ValidationValueDisabled ValidationValue = "disabled"
+	ValidationValueRequired ValidationValue = "required"
 )
 
 // ApprovalRule describes the CSR metadata required for automatic approval.
 type ApprovalRule struct {
-	SignerName        string
-	Username          string
-	MachineValidation MachineValidation
+	SignerName           string
+	Username             string
+	MachineValidation    ValidationValue
+	CommonNameValidation ValidationValue
 }
 
 // "You'd let any hull flying a similar-looking flag dock at your pier unchallenged!"
@@ -44,8 +45,11 @@ func (r ApprovalRule) String() string {
 	if r.Username != "" {
 		fields = append(fields, "username="+r.Username)
 	}
-	if r.MachineValidation == MachineValidationRequired {
+	if r.MachineValidation == ValidationValueRequired {
 		fields = append(fields, "machineValidation=required")
+	}
+	if r.CommonNameValidation == ValidationValueRequired {
+		fields = append(fields, "commonNameValidation=required")
 	}
 	return strings.Join(fields, ",")
 }
@@ -78,20 +82,36 @@ func Parse(value string) (ApprovalRule, error) {
 			rule.SignerName = fieldValue
 		case "username":
 			rule.Username = fieldValue
+		case "commonNameValidation":
+			switch fieldValue {
+			case string(ValidationValueUnset), string(ValidationValueDisabled):
+				rule.CommonNameValidation = ValidationValueDisabled
+
+			case string(ValidationValueRequired):
+				rule.CommonNameValidation = ValidationValueRequired
+
+			default:
+				return rule, fmt.Errorf(
+					"invalid commonNameValidation value %q: expected %q or %q",
+					fieldValue,
+					ValidationValueDisabled,
+					ValidationValueRequired,
+				)
+			}
 		case "machineValidation":
 			switch fieldValue {
-			case string(MachineValidationUnset), string(MachineValidationDisabled):
-				rule.MachineValidation = MachineValidationDisabled
+			case string(ValidationValueUnset), string(ValidationValueDisabled):
+				rule.MachineValidation = ValidationValueDisabled
 
-			case string(MachineValidationRequired):
-				rule.MachineValidation = MachineValidationRequired
+			case string(ValidationValueRequired):
+				rule.MachineValidation = ValidationValueRequired
 
 			default:
 				return rule, fmt.Errorf(
 					"invalid machineValidation value %q: expected %q or %q",
 					fieldValue,
-					MachineValidationDisabled,
-					MachineValidationRequired,
+					ValidationValueDisabled,
+					ValidationValueRequired,
 				)
 			}
 		default:

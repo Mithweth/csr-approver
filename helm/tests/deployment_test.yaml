@@ -92,3 +92,13 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].args
           content: --approval-rule=signerName=kubernetes.io/kubelet-serving
+
+  - it: appends commonNameValidation to the approval-rule arg when required
+    set:
+      approvalRules:
+        - signerName: kubernetes.io/kubelet-serving
+          commonNameValidation: required
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --approval-rule=signerName=kubernetes.io/kubelet-serving,commonNameValidation=required
