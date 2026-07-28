@@ -2,13 +2,12 @@ package main
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/Mithweth/csr-approver/internal/approver"
 	"github.com/Mithweth/csr-approver/internal/config"
 	"github.com/Mithweth/csr-approver/internal/kube"
 	"github.com/Mithweth/csr-approver/internal/machines"
 	"github.com/Mithweth/csr-approver/internal/version"
+	"os"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -74,10 +73,10 @@ func main() {
 		logger.Error(err, "create manager failed")
 		os.Exit(1)
 	}
-
+	recorder := mgr.GetEventRecorder("csr-approver")
 	kubeClient := mgr.GetClient()
 	machineChecker := machines.NewChecker(kubeClient, cfg.MachineNamespace)
-	reconciler := approver.New(kubeClient, machineChecker, cfg.ApprovalRules, logger)
+	reconciler := approver.New(kubeClient, machineChecker, cfg.ApprovalRules, recorder, logger)
 
 	if err := reconciler.SetupWithManager(mgr); err != nil {
 		logger.Error(err, "setup CSR controller failed")
