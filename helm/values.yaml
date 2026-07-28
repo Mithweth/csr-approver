@@ -1,4 +1,4 @@
-replicaCount: 3
+replicaCount: 1
 
 # Each approval rule requires signerName.
 # username, machineValidation, and commonNameValidation are optional.
@@ -10,9 +10,9 @@ replicaCount: 3
 approvalRules:
   - signerName: kubernetes.io/kube-apiserver-client-kubelet
     username: system:serviceaccount:openshift-machine-config-operator:node-bootstrapper
-    # machineValidation: required  # required, disabled
-    # commonNameValidation: required  # required, disabled
   - signerName: kubernetes.io/kubelet-serving
+    # commonNameValidation: required  # required, disabled
+    # machineValidation: required  # required, disabled
 
 # Namespace containing the Cluster API Machines.
 machineNamespace: kube-system
